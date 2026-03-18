@@ -235,8 +235,10 @@ def run_pyqt_gui(main_func, report_func=None):
             # Processing control
             self.is_processing = False
             self.is_paused = False
+            self.is_stopped = False
             self.pause_event = threading.Event()
             self.pause_event.set()
+            self.stop_event = threading.Event()
 
             # Store last run data for the report dialog
             self._last_results = []
@@ -377,7 +379,7 @@ def run_pyqt_gui(main_func, report_func=None):
         def on_process_complete(self):
             """Show completion summary and optional report dialog in the main thread."""
             try:
-                if self.is_paused:
+                if self.is_paused or self.is_stopped:
                     return
 
                 results = self._last_results
@@ -648,12 +650,15 @@ def run_pyqt_gui(main_func, report_func=None):
         def stop_process(self):
             """Stop the processing"""
             if self.is_processing:
-                self.is_processing = False
-                self.pause_event.set()  # Release pause if paused
+                self.is_stopped = True
+                self.stop_event.set()    # Signal the worker to stop
+                self.pause_event.set()   # Unblock if currently paused
+                self.is_paused = False
                 self.output_signal.emit("⏹️ Stopping processing...\n")
                 self.progress_label.setText("Stopping...")
                 self.run_button.setEnabled(True)
                 self.pause_button.setEnabled(False)
+                self.pause_button.setText("⏸️ Pause")
                 self.stop_button.setEnabled(False)
         
         def run_process(self):
@@ -668,7 +673,9 @@ def run_pyqt_gui(main_func, report_func=None):
             # Reset state
             self.is_processing = True
             self.is_paused = False
+            self.is_stopped = False
             self.pause_event.set()
+            self.stop_event.clear()
             
             self.run_button.setEnabled(False)
             self.pause_button.setEnabled(True)
@@ -686,7 +693,8 @@ def run_pyqt_gui(main_func, report_func=None):
                             str(f"Processing: {file}")
                         ),
                         self.pause_event,
-                        lambda song_data: self.song_card_signal.emit(dict(song_data))
+                        lambda song_data: self.song_card_signal.emit(dict(song_data)),
+                        stop_event=self.stop_event,
                     )
                     self._last_results = results or []
                     if self.is_processing:

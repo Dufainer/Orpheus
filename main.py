@@ -468,7 +468,8 @@ def print_change_summary(results):
 # ─── MAIN FUNCTION ────────────────────────────────────────────────────────────
 
 def main(music_dir=None, print_func=print, progress_callback=None,
-         pause_event=None, song_card_callback=None, ask_report=False):
+         pause_event=None, song_card_callback=None, ask_report=False,
+         stop_event=None):
     """
     Core processing function.
     When ask_report=True the user is prompted after processing whether to
@@ -500,11 +501,17 @@ def main(music_dir=None, print_func=print, progress_callback=None,
     results = []
     ok = 0
     for i, filepath in enumerate(files, 1):
-        # Check if processing should be paused or stopped
+        # Check if processing should be stopped
+        if stop_event and stop_event.is_set():
+            print_func("⏹️  Processing stopped by user")
+            break
+
+        # Check if processing should be paused
         if pause_event and not pause_event.is_set():
             print_func(f"\n⏸️  Paused at file {i}/{len(files)}")
             pause_event.wait()
-            if not pause_event.is_set():
+            # After unblocking, check if we were stopped (not just resumed)
+            if stop_event and stop_event.is_set():
                 print_func("⏹️  Processing stopped by user")
                 break
             print_func(f"▶️  Resuming from file {i}/{len(files)}")
